@@ -1,0 +1,98 @@
+{
+  "satellite_type": "MEO",
+  "prediction_count": 9,
+  "horizons": [
+    "15min",
+    "30min",
+    "45min",
+    "1h",
+    "2h",
+    "3h",
+    "6h",
+    "12h",
+    "24h"
+  ],
+  "predictions": [
+    {
+      "horizon_label": "15min",
+      "horizon_minutes": 15,
+      "timestamp_predicted": "2025-09-08 11:45:00",
+      "x_error_pred": 0.7816703395093206,
+      "y_error_pred": 0.8624039660807618,
+      "z_error_pred": 0.09826162584577017,
+      "satclockerror_pred": 0.126820300360954
+    },
+    {
+      "horizon_label": "30min",
+      "horizon_minutes": 30,
+      "timestamp_predicted": "2025-09-08 12:00:00",
+      "x_error_pred": 0.5323982885124066,
+      "y_error_pred": 0.3975377331508233,
+      "z_error_pred": -0.3366528813617196,
+      "satclockerror_pred": 0.0008197364575341821
+    },
+    {
+      "horizon_label": "45min",
+      "horizon_minutes": 45,
+      "timestamp_predicted": "2025-09-08 12:15:00",
+      "x_error_pred": 0.9605901201298488,
+      "y_error_pred": 1.0509877537443364,
+      "z_error_pred": 0.3302364614172143,
+      "satclockerror_pred": 0.38366464785093946
+    },
+    {
+      "horizon_label": "1h",
+      "horizon_minutes": 60,
+      "timestamp_predicted": "2025-09-08 12:30:00",
+      "x_error_pred": 1.0466793696784973,
+      "y_error_pred": 0.8748735001406125,
+      "z_error_pred": 0.26094797991240887,
+      "satclockerror_pred": 0.013937675352791893
+    },
+    {
+      "horizon_label": "2h",
+      "horizon_minutes": 120,
+      "timestamp_predicted": "2025-09-08 13:30:00",
+      "x_error_pred": 0.03166968620235894,
+      "y_error_pred": 0.6244679866450126,
+      "z_error_pred": -0.25147517725841484,
+      "satclockerror_pred": -0.24210787409943763
+    },
+    {
+      "horizon_label": "3h",
+      "horizon_minutes": 180,
+      "timestamp_predicted": "2025-09-08 14:30:00",
+      "x_error_pred": 0.08686827926446161,
+      "y_error_pred": 0.09225064567455654,
+      "z_error_pred": -0.21858470400061195,
+      "satclockerror_pred": -0.19754074239287392
+    },
+    {
+      "horizon_label": "6h",
+      "horizon_minutes": 360,
+      "timestamp_predicted": "2025-09-08 17:30:00",
+      "x_error_pred": -0.5029889080149373,
+      "y_error_pred": 0.4626093434343639,
+      "z_error_pred": -0.2873018275914843,
+      "satclockerror_pred": -0.029951390868728143
+    },
+    {
+      "horizon_label": "12h",
+      "horizon_minutes": 720,
+      "timestamp_predicted": "2025-09-08 23:30:00",
+      "x_error_pred": -0.17805160649412793,
+      "y_error_pred": -0.22712029561378821,
+      "z_error_pred": -0.1104143100724851,
+      "satclockerror_pred": -0.007176971331863697
+    },
+    {
+      "horizon_label": "24h",
+      "horizon_minutes": 1440,
+      "timestamp_predicted": "2025-09-09 11:30:00",
+      "x_error_pred": 0.2784815196595295,
+      "y_error_pred": -0.2711400191277846,
+      "z_error_pred": 0.4250428090235872,
+      "satclockerror_pred": 0.4217354768349555
+    }
+  ]
+}
