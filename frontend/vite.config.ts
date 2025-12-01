@@ -56,5 +56,9 @@
     server: {
       port: 3000,
       open: true,
+      // Allow serving files from the backend directory
+      fs: {
+        allow: ['..'],
+      },
     },
   });
