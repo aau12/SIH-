@@ -1,3 +1,4 @@
+
 """
 GNSS Residual Analysis Module
 ==============================
@@ -17,7 +18,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from scipy.stats import shapiro
+from scipy.stats import shapiro, anderson, skew, kurtosis
 import statsmodels.api as sm
 from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 
@@ -39,12 +40,12 @@ ALPHA = 0.05
 def ensure_directories():
     """Create necessary directories."""
     RESIDUALS_DIR.mkdir(parents=True, exist_ok=True)
-    print(f"✓ Directories ensured: {RESIDUALS_DIR}")
+    print(f"[OK] Directories ensured: {RESIDUALS_DIR}")
 
 
 def load_predictions_and_ground_truth(satellite_type):
     """Load predictions and ground truth data."""
-    print(f"\n→ Loading data for {satellite_type}...")
+    print(f"\n-> Loading data for {satellite_type}...")
     
     pred_file = PREDICTIONS_DIR / f"{satellite_type}_Day8_Predictions.csv"
     gt_file = PROCESSED_DATA_DIR / f"{satellite_type}_clean_15min.csv"
@@ -55,15 +56,15 @@ def load_predictions_and_ground_truth(satellite_type):
     ground_truth_df = pd.read_csv(gt_file, index_col=0, parse_dates=True)
     ground_truth_df.columns = ground_truth_df.columns.str.replace(r'\s+', ' ', regex=True).str.strip()
     
-    print(f"  ✓ Loaded {len(predictions_df)} predictions")
-    print(f"  ✓ Loaded {len(ground_truth_df)} ground truth rows")
+    print(f"  [OK] Loaded {len(predictions_df)} predictions")
+    print(f"  [OK] Loaded {len(ground_truth_df)} ground truth rows")
     
     return predictions_df, ground_truth_df
 
 
 def compute_residuals(predictions_df, ground_truth_df):
     """Compute residuals for all variables and horizons."""
-    print(f"\n→ Computing residuals...")
+    print(f"\n-> Computing residuals...")
     
     residuals = {}
     
@@ -92,14 +93,14 @@ def compute_residuals(predictions_df, ground_truth_df):
             if residual_list:
                 residuals[short_name][horizon_label] = np.array(residual_list)
     
-    print(f"  ✓ Computed residuals for {len(residuals)} variables")
+    print(f"  [OK] Computed residuals for {len(residuals)} variables")
     
     return residuals
 
 
-def run_shapiro_tests(residuals, satellite_type):
-    """Perform Shapiro-Wilk normality tests."""
-    print(f"\n→ Running Shapiro-Wilk tests for {satellite_type}...")
+def run_shapiro_tests(residuals, satellite_type, sample_size=50):
+    """Perform Shapiro-Wilk and Anderson-Darling normality tests with representative sampling."""
+    print(f"\n-> Running normality tests for {satellite_type} (sample size: {sample_size})...")
     
     results = []
     
@@ -108,31 +109,54 @@ def run_shapiro_tests(residuals, satellite_type):
             if horizon_label in residuals[short_name]:
                 res_array = residuals[short_name][horizon_label]
                 
+                # Use representative sampling if we have more than sample_size
+                if len(res_array) > sample_size:
+                    np.random.seed(42)
+                    res_array = np.random.choice(res_array, size=sample_size, replace=False)
+                
                 if len(res_array) >= 3:
                     try:
-                        W, p = shapiro(res_array)
-                        normal = 'Yes' if p > ALPHA else 'No'
+                        # Shapiro-Wilk test
+                        W, p_shapiro = shapiro(res_array)
+                        normal_shapiro = 'Yes' if p_shapiro > ALPHA else 'No'
+                        
+                        # Anderson-Darling test
+                        ad_result = anderson(res_array, dist='norm')
+                        ad_stat = ad_result.statistic
+                        ad_critical = ad_result.critical_values[2]  # 5% significance
+                        normal_anderson = 'Yes' if ad_stat < ad_critical else 'No'
+                        
+                        # Distribution metrics
+                        skewness = skew(res_array)
+                        kurt = kurtosis(res_array)
                         
                         results.append({
                             'satellite': satellite_type,
                             'variable': short_name,
+                            'horizon_label': horizon_label,
                             'horizon_min': horizon_min,
+                            'n_samples': len(res_array),
                             'W': W,
-                            'p': p,
-                            'normal': normal
+                            'p_shapiro': p_shapiro,
+                            'normal_shapiro': normal_shapiro,
+                            'ad_statistic': ad_stat,
+                            'ad_critical': ad_critical,
+                            'normal_anderson': normal_anderson,
+                            'skewness': skewness,
+                            'kurtosis': kurt
                         })
                     except:
                         pass
     
     results_df = pd.DataFrame(results)
-    print(f"  ✓ Completed {len(results_df)} tests")
+    print(f"  [OK] Completed {len(results_df)} tests")
     
     return results_df
 
 
 def plot_histograms(residuals, satellite_type):
     """Generate histogram plots for residuals."""
-    print(f"\n→ Generating histograms for {satellite_type}...")
+    print(f"\n-> Generating histograms for {satellite_type}...")
     
     count = 0
     for short_name in ERROR_COLUMNS_SHORT:
@@ -157,12 +181,12 @@ def plot_histograms(residuals, satellite_type):
                 plt.close()
                 count += 1
     
-    print(f"  ✓ Generated {count} histograms")
+    print(f"  [OK] Generated {count} histograms")
 
 
 def plot_qq_plots(residuals, satellite_type):
     """Generate QQ plots for residuals."""
-    print(f"\n→ Generating QQ plots for {satellite_type}...")
+    print(f"\n-> Generating QQ plots for {satellite_type}...")
     
     count = 0
     for short_name in ERROR_COLUMNS_SHORT:
@@ -183,12 +207,12 @@ def plot_qq_plots(residuals, satellite_type):
                 plt.close()
                 count += 1
     
-    print(f"  ✓ Generated {count} QQ plots")
+    print(f"  [OK] Generated {count} QQ plots")
 
 
 def plot_acf_pacf(residuals, satellite_type):
     """Generate ACF and PACF plots."""
-    print(f"\n→ Generating ACF/PACF plots for {satellite_type}...")
+    print(f"\n-> Generating ACF/PACF plots for {satellite_type}...")
     
     count = 0
     for short_name in ERROR_COLUMNS_SHORT:
@@ -213,12 +237,12 @@ def plot_acf_pacf(residuals, satellite_type):
         plt.close()
         count += 1
     
-    print(f"  ✓ Generated {count} ACF/PACF plots")
+    print(f"  [OK] Generated {count} ACF/PACF plots")
 
 
 def detect_drift(residuals, satellite_type):
     """Detect drift in residuals."""
-    print(f"\n→ Detecting drift for {satellite_type}...")
+    print(f"\n-> Detecting drift for {satellite_type}...")
     
     count = 0
     for short_name in ERROR_COLUMNS_SHORT:
@@ -248,12 +272,12 @@ def detect_drift(residuals, satellite_type):
         plt.close()
         count += 1
     
-    print(f"  ✓ Generated {count} drift plots")
+    print(f"  [OK] Generated {count} drift plots")
 
 
 def generate_residual_summary(residuals, shapiro_df, satellite_type):
     """Generate comprehensive residual summary."""
-    print(f"\n→ Generating summary for {satellite_type}...")
+    print(f"\n-> Generating summary for {satellite_type}...")
     
     summary = []
     
@@ -296,22 +320,22 @@ def generate_residual_summary(residuals, shapiro_df, satellite_type):
                 })
     
     summary_df = pd.DataFrame(summary)
-    print(f"  ✓ Generated summary with {len(summary_df)} rows")
+    print(f"  [OK] Generated summary with {len(summary_df)} rows")
     
     return summary_df
 
 
 def save_all_outputs(shapiro_df, summary_df):
     """Save all analysis outputs."""
-    print(f"\n→ Saving outputs...")
+    print(f"\n-> Saving outputs...")
     
     shapiro_path = RESIDUALS_DIR / "shapiro_results.csv"
     shapiro_df.to_csv(shapiro_path, index=False)
-    print(f"  ✓ Saved: {shapiro_path}")
+    print(f"  [OK] Saved: {shapiro_path}")
     
     summary_path = RESIDUALS_DIR / "residual_summary.csv"
     summary_df.to_csv(summary_path, index=False)
-    print(f"  ✓ Saved: {summary_path}")
+    print(f"  [OK] Saved: {summary_path}")
 
 
 def analyze_residuals(satellite_type):
@@ -331,13 +355,13 @@ def analyze_residuals(satellite_type):
         summary_df = generate_residual_summary(residuals, shapiro_df, satellite_type)
         
         print(f"\n{'='*70}")
-        print(f"✓ {satellite_type} ANALYSIS COMPLETED")
+        print(f"[OK] {satellite_type} ANALYSIS COMPLETED")
         print(f"{'='*70}\n")
         
         return shapiro_df, summary_df
         
     except Exception as e:
-        print(f"\n✗ ERROR: {e}")
+        print(f"\n[ERROR]: {e}")
         import traceback
         traceback.print_exc()
         raise
@@ -365,7 +389,7 @@ def main():
     save_all_outputs(combined_shapiro, combined_summary)
     
     print("\n" + "="*70)
-    print("✓ ALL RESIDUAL ANALYSIS COMPLETED")
+    print("[OK] ALL RESIDUAL ANALYSIS COMPLETED")
     print("="*70)
 
 

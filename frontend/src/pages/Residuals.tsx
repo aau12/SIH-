@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Activity, BarChart3, TrendingDown, AlertCircle } from 'lucide-react';
+import { Activity, BarChart3, TrendingDown, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
 import PageLayout from '@/components/layout/PageLayout';
-import { dataLoader, ResidualSummary } from '@/services/dataLoader';
+import { dataLoader, ResidualSummary, ShapiroResult } from '@/services/dataLoader';
 import {
   BarChart,
   Bar,
@@ -20,25 +20,30 @@ const VARIABLES = ['x_error', 'y_error', 'z_error', 'satclockerror'];
 
 export default function ResidualsPage() {
   const [residuals, setResiduals] = useState<ResidualSummary[]>([]);
+  const [shapiroResults, setShapiroResults] = useState<ShapiroResult[]>([]);
   const [satellite, setSatellite] = useState<'MEO' | 'GEO'>('MEO');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    async function loadResiduals() {
+    async function loadData() {
       try {
         setLoading(true);
-        const data = await dataLoader.loadResidualSummary('/data/residuals/residual_summary.csv');
-        setResiduals(data);
+        const [residualData, shapiroData] = await Promise.all([
+          dataLoader.loadResidualSummary('/data/residuals/residual_summary.csv'),
+          dataLoader.loadShapiroResults(`/data/${satellite}_shapiro.csv`)
+        ]);
+        setResiduals(residualData);
+        setShapiroResults(shapiroData);
       } catch (err) {
-        setError('Failed to load residual data');
+        setError('Failed to load data');
         console.error(err);
       } finally {
         setLoading(false);
       }
     }
-    loadResiduals();
-  }, []);
+    loadData();
+  }, [satellite]);
 
   const filteredResiduals = residuals.filter((r) => r.satellite === satellite);
 
@@ -154,6 +159,94 @@ export default function ResidualsPage() {
                   ))}
                 </BarChart>
               </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Shapiro-Wilk Normality Test Results */}
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-6 mb-8">
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
+              Shapiro-Wilk Normality Test ({satellite})
+            </h3>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+              Tests if residuals follow a normal distribution (p &gt; 0.05 = Normal). Sample size: 50 per horizon.
+            </p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 dark:bg-slate-800">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-medium text-slate-700 dark:text-slate-300">Horizon</th>
+                    <th className="px-4 py-3 text-center font-medium text-slate-700 dark:text-slate-300">X Error</th>
+                    <th className="px-4 py-3 text-center font-medium text-slate-700 dark:text-slate-300">Y Error</th>
+                    <th className="px-4 py-3 text-center font-medium text-slate-700 dark:text-slate-300">Z Error</th>
+                    <th className="px-4 py-3 text-center font-medium text-slate-700 dark:text-slate-300">Clock Error</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+                  {shapiroResults.map((row, idx) => (
+                    <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                      <td className="px-4 py-3 font-medium text-slate-900 dark:text-white">{row.horizon_label}</td>
+                      <td className="px-4 py-3 text-center">
+                        <div className="flex items-center justify-center gap-2">
+                          {row.normal_x_error === 'Yes' ? (
+                            <CheckCircle className="w-4 h-4 text-green-500" />
+                          ) : (
+                            <XCircle className="w-4 h-4 text-red-500" />
+                          )}
+                          <span className={`text-xs ${row.normal_x_error === 'Yes' ? 'text-green-600' : 'text-red-600'}`}>
+                            p={row.p_x_error?.toFixed(3) || 'N/A'}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <div className="flex items-center justify-center gap-2">
+                          {row.normal_y_error === 'Yes' ? (
+                            <CheckCircle className="w-4 h-4 text-green-500" />
+                          ) : (
+                            <XCircle className="w-4 h-4 text-red-500" />
+                          )}
+                          <span className={`text-xs ${row.normal_y_error === 'Yes' ? 'text-green-600' : 'text-red-600'}`}>
+                            p={row.p_y_error?.toFixed(3) || 'N/A'}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <div className="flex items-center justify-center gap-2">
+                          {row.normal_z_error === 'Yes' ? (
+                            <CheckCircle className="w-4 h-4 text-green-500" />
+                          ) : (
+                            <XCircle className="w-4 h-4 text-red-500" />
+                          )}
+                          <span className={`text-xs ${row.normal_z_error === 'Yes' ? 'text-green-600' : 'text-red-600'}`}>
+                            p={row.p_z_error?.toFixed(3) || 'N/A'}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <div className="flex items-center justify-center gap-2">
+                          {row.normal_satclockerror === 'Yes' ? (
+                            <CheckCircle className="w-4 h-4 text-green-500" />
+                          ) : (
+                            <XCircle className="w-4 h-4 text-red-500" />
+                          )}
+                          <span className={`text-xs ${row.normal_satclockerror === 'Yes' ? 'text-green-600' : 'text-red-600'}`}>
+                            p={row.p_satclockerror?.toFixed(3) || 'N/A'}
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="mt-4 flex items-center gap-6 text-sm text-slate-500">
+              <div className="flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 text-green-500" />
+                <span>Normal (p &gt; 0.05)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <XCircle className="w-4 h-4 text-red-500" />
+                <span>Non-Normal (p ≤ 0.05)</span>
+              </div>
             </div>
           </div>
 

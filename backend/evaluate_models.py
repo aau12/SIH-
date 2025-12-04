@@ -54,7 +54,7 @@ def ensure_directories():
     EVALUATION_DIR.mkdir(parents=True, exist_ok=True)
     PLOTS_DIR.mkdir(parents=True, exist_ok=True)
     DASHBOARD_DIR.mkdir(parents=True, exist_ok=True)
-    print(f"✓ Directories ensured: {EVALUATION_DIR}, {PLOTS_DIR}, {DASHBOARD_DIR}")
+    print(f"[OK] Directories ensured: {EVALUATION_DIR}, {PLOTS_DIR}, {DASHBOARD_DIR}")
 
 
 # ============================================================================
@@ -76,12 +76,12 @@ def load_predictions(satellite_type):
     if not pred_file.exists():
         raise FileNotFoundError(f"Predictions file not found: {pred_file}")
     
-    print(f"\n→ Loading predictions from: {pred_file}")
+    print(f"\n-> Loading predictions from: {pred_file}")
     df = pd.read_csv(pred_file)
     df['timestamp_predicted'] = pd.to_datetime(df['timestamp_predicted'])
     
-    print(f"  ✓ Loaded {len(df)} predictions")
-    print(f"  ✓ Horizons: {df['horizon_label'].unique().tolist()}")
+    print(f"  [OK] Loaded {len(df)} predictions")
+    print(f"  [OK] Horizons: {df['horizon_label'].unique().tolist()}")
     
     return df
 
@@ -101,14 +101,14 @@ def load_ground_truth(satellite_type):
     if not gt_file.exists():
         raise FileNotFoundError(f"Ground truth file not found: {gt_file}")
     
-    print(f"\n→ Loading ground truth from: {gt_file}")
+    print(f"\n-> Loading ground truth from: {gt_file}")
     df = pd.read_csv(gt_file, index_col=0, parse_dates=True)
     
     # Normalize column names
     df.columns = df.columns.str.replace(r'\s+', ' ', regex=True).str.strip()
     
-    print(f"  ✓ Loaded {len(df)} rows")
-    print(f"  ✓ Time range: {df.index.min()} to {df.index.max()}")
+    print(f"  [OK] Loaded {len(df)} rows")
+    print(f"  [OK] Time range: {df.index.min()} to {df.index.max()}")
     
     return df
 
@@ -124,7 +124,7 @@ def match_predictions_with_ground_truth(predictions_df, ground_truth_df):
     Returns:
         DataFrame with matched predictions and actuals
     """
-    print(f"\n→ Matching predictions with ground truth...")
+    print(f"\n-> Matching predictions with ground truth...")
     
     matched_data = []
     
@@ -153,8 +153,8 @@ def match_predictions_with_ground_truth(predictions_df, ground_truth_df):
     
     matched_df = pd.DataFrame(matched_data)
     
-    print(f"  ✓ Matched {len(matched_df)} predictions with ground truth")
-    print(f"  ✓ Coverage: {len(matched_df)}/{len(predictions_df)} predictions")
+    print(f"  [OK] Matched {len(matched_df)} predictions with ground truth")
+    print(f"  [OK] Coverage: {len(matched_df)}/{len(predictions_df)} predictions")
     
     return matched_df
 
@@ -193,7 +193,7 @@ def compute_metrics(matched_df):
     Returns:
         DataFrame with metrics
     """
-    print(f"\n→ Computing evaluation metrics...")
+    print(f"\n-> Computing evaluation metrics...")
     
     metrics_list = []
     
@@ -201,7 +201,7 @@ def compute_metrics(matched_df):
         horizon_data = matched_df[matched_df['horizon_label'] == horizon_label]
         
         if len(horizon_data) == 0:
-            print(f"  ⚠ No data for horizon {horizon_label}")
+            print(f"  [WARN] No data for horizon {horizon_label}")
             continue
         
         metrics = {
@@ -221,12 +221,12 @@ def compute_metrics(matched_df):
         
         metrics_list.append(metrics)
         
-        print(f"  • {horizon_label:6s}: RMSE(x)={metrics['rmse_x_error']:.4f}m, "
+        print(f"  - {horizon_label:6s}: RMSE(x)={metrics['rmse_x_error']:.4f}m, "
               f"MAE(x)={metrics['mae_x_error']:.4f}m")
     
     metrics_df = pd.DataFrame(metrics_list)
     
-    print(f"  ✓ Computed metrics for {len(metrics_df)} horizons")
+    print(f"  [OK] Computed metrics for {len(metrics_df)} horizons")
     
     return metrics_df
 
@@ -235,17 +235,18 @@ def compute_metrics(matched_df):
 # STATISTICAL TESTS
 # ============================================================================
 
-def compute_shapiro_wilk(matched_df):
+def compute_shapiro_wilk(matched_df, sample_size=50):
     """
-    Perform Shapiro-Wilk normality test on residuals.
+    Perform Shapiro-Wilk normality test on residuals using representative sampling.
     
     Args:
         matched_df: DataFrame with matched predictions and actuals
+        sample_size: Number of samples to use per horizon (default: 50)
         
     Returns:
         DataFrame with Shapiro-Wilk test results
     """
-    print(f"\n→ Performing Shapiro-Wilk normality tests...")
+    print(f"\n-> Performing Shapiro-Wilk normality tests (sample size: {sample_size})...")
     
     shapiro_results = []
     
@@ -253,12 +254,13 @@ def compute_shapiro_wilk(matched_df):
         horizon_data = matched_df[matched_df['horizon_label'] == horizon_label]
         
         if len(horizon_data) < 3:
-            print(f"  ⚠ Insufficient data for {horizon_label} (need ≥3 samples)")
+            print(f"  [WARN] Insufficient data for {horizon_label} (need >=3 samples)")
             continue
         
         result = {
             'horizon_label': horizon_label,
-            'horizon_minutes': horizon_min
+            'horizon_minutes': horizon_min,
+            'n_samples': min(sample_size, len(horizon_data))
         }
         
         # Test each error column
@@ -268,6 +270,11 @@ def compute_shapiro_wilk(matched_df):
             # Remove NaN values
             residuals = residuals[~np.isnan(residuals)]
             
+            # Use representative sampling if we have more than sample_size
+            if len(residuals) > sample_size:
+                np.random.seed(42)  # For reproducibility
+                residuals = np.random.choice(residuals, size=sample_size, replace=False)
+            
             if len(residuals) >= 3:
                 try:
                     W, p_value = shapiro(residuals)
@@ -275,7 +282,7 @@ def compute_shapiro_wilk(matched_df):
                     result[f'p_{short_name}'] = p_value
                     result[f'normal_{short_name}'] = 'Yes' if p_value > ALPHA else 'No'
                 except Exception as e:
-                    print(f"    ⚠ Shapiro test failed for {short_name} at {horizon_label}: {e}")
+                    print(f"    [WARN] Shapiro test failed for {short_name} at {horizon_label}: {e}")
                     result[f'W_{short_name}'] = np.nan
                     result[f'p_{short_name}'] = np.nan
                     result[f'normal_{short_name}'] = 'N/A'
@@ -288,11 +295,11 @@ def compute_shapiro_wilk(matched_df):
         
         # Print summary
         normal_count = sum([result.get(f'normal_{s}') == 'Yes' for s in ERROR_COLUMNS_SHORT])
-        print(f"  • {horizon_label:6s}: {normal_count}/4 variables normally distributed")
+        print(f"  - {horizon_label:6s}: {normal_count}/4 variables normally distributed (n={result['n_samples']})")
     
     shapiro_df = pd.DataFrame(shapiro_results)
     
-    print(f"  ✓ Completed normality tests for {len(shapiro_df)} horizons")
+    print(f"  [OK] Completed normality tests for {len(shapiro_df)} horizons")
     
     return shapiro_df
 
@@ -309,7 +316,7 @@ def generate_qq_plots(matched_df, satellite_type):
         matched_df: DataFrame with matched predictions and actuals
         satellite_type: 'MEO' or 'GEO'
     """
-    print(f"\n→ Generating QQ plots for {satellite_type}...")
+    print(f"\n-> Generating QQ plots for {satellite_type}...")
     
     plot_count = 0
     
@@ -342,7 +349,7 @@ def generate_qq_plots(matched_df, satellite_type):
             
             plot_count += 1
     
-    print(f"  ✓ Generated {plot_count} QQ plots")
+    print(f"  [OK] Generated {plot_count} QQ plots")
 
 
 def generate_residual_histograms(matched_df, satellite_type):
@@ -353,7 +360,7 @@ def generate_residual_histograms(matched_df, satellite_type):
         matched_df: DataFrame with matched predictions and actuals
         satellite_type: 'MEO' or 'GEO'
     """
-    print(f"\n→ Generating residual histograms for {satellite_type}...")
+    print(f"\n-> Generating residual histograms for {satellite_type}...")
     
     plot_count = 0
     
@@ -396,7 +403,7 @@ def generate_residual_histograms(matched_df, satellite_type):
             
             plot_count += 1
     
-    print(f"  ✓ Generated {plot_count} histograms")
+    print(f"  [OK] Generated {plot_count} histograms")
 
 
 def generate_dashboard_plots(metrics_df, matched_df, satellite_type):
@@ -408,7 +415,7 @@ def generate_dashboard_plots(metrics_df, matched_df, satellite_type):
         matched_df: DataFrame with matched data
         satellite_type: 'MEO' or 'GEO'
     """
-    print(f"\n→ Generating dashboard plots for {satellite_type}...")
+    print(f"\n-> Generating dashboard plots for {satellite_type}...")
     
     # 1. RMSE vs Horizon
     fig, ax = plt.subplots(figsize=(12, 6))
@@ -507,7 +514,7 @@ def generate_dashboard_plots(metrics_df, matched_df, satellite_type):
     plt.savefig(DASHBOARD_DIR / f"{satellite_type.lower()}_rmse_heatmap.png", dpi=150, bbox_inches='tight')
     plt.close()
     
-    print(f"  ✓ Generated 4 dashboard plots")
+    print(f"  [OK] Generated 4 dashboard plots")
 
 
 # ============================================================================
@@ -524,7 +531,7 @@ def save_metrics_table(metrics_df, satellite_type):
     """
     output_path = EVALUATION_DIR / f"{satellite_type}_metrics.csv"
     metrics_df.to_csv(output_path, index=False)
-    print(f"\n✓ Metrics table saved to: {output_path}")
+    print(f"\n[OK] Metrics table saved to: {output_path}")
 
 
 def save_shapiro_table(shapiro_df, satellite_type):
@@ -537,7 +544,7 @@ def save_shapiro_table(shapiro_df, satellite_type):
     """
     output_path = EVALUATION_DIR / f"{satellite_type}_shapiro.csv"
     shapiro_df.to_csv(output_path, index=False)
-    print(f"✓ Shapiro-Wilk results saved to: {output_path}")
+    print(f"[OK] Shapiro-Wilk results saved to: {output_path}")
 
 
 def print_evaluation_summary(metrics_df, shapiro_df, satellite_type):
@@ -553,32 +560,32 @@ def print_evaluation_summary(metrics_df, shapiro_df, satellite_type):
     print(f"EVALUATION SUMMARY - {satellite_type}")
     print(f"{'='*70}")
     
-    print(f"\n📊 ACCURACY METRICS:")
-    print(f"  • Best RMSE (15min): {metrics_df.iloc[0]['rmse_x_error']:.4f}m (x_error)")
-    print(f"  • Worst RMSE (24h): {metrics_df.iloc[-1]['rmse_x_error']:.4f}m (x_error)")
+    print(f"\nACCURACY METRICS:")
+    print(f"  - Best RMSE (15min): {metrics_df.iloc[0]['rmse_x_error']:.4f}m (x_error)")
+    print(f"  - Worst RMSE (24h): {metrics_df.iloc[-1]['rmse_x_error']:.4f}m (x_error)")
     
     # Average metrics
     avg_rmse = np.mean([metrics_df[f'rmse_{s}'].mean() for s in ERROR_COLUMNS_SHORT])
     avg_mae = np.mean([metrics_df[f'mae_{s}'].mean() for s in ERROR_COLUMNS_SHORT])
     
-    print(f"  • Average RMSE: {avg_rmse:.4f}m")
-    print(f"  • Average MAE: {avg_mae:.4f}m")
+    print(f"  - Average RMSE: {avg_rmse:.4f}m")
+    print(f"  - Average MAE: {avg_mae:.4f}m")
     
-    print(f"\n📈 NORMALITY TESTS:")
+    print(f"\nNORMALITY TESTS:")
     if len(shapiro_df) > 0:
         for short_name in ERROR_COLUMNS_SHORT:
             if f'normal_{short_name}' in shapiro_df.columns:
                 normal_count = shapiro_df[f'normal_{short_name}'].value_counts().get('Yes', 0)
                 total_count = len(shapiro_df)
-                print(f"  • {short_name.replace('_', ' ').title()}: {normal_count}/{total_count} horizons normally distributed")
+                print(f"  - {short_name.replace('_', ' ').title()}: {normal_count}/{total_count} horizons normally distributed")
     else:
-        print(f"  ⚠ Insufficient data for normality tests (need ≥3 samples per horizon)")
+        print(f"  [WARN] Insufficient data for normality tests (need >=3 samples per horizon)")
     
-    print(f"\n📁 OUTPUT FILES:")
-    print(f"  • Metrics: evaluation/{satellite_type}_metrics.csv")
-    print(f"  • Shapiro: evaluation/{satellite_type}_shapiro.csv")
-    print(f"  • Plots: evaluation/plots/ ({len(list(PLOTS_DIR.glob(f'*{satellite_type.lower()}*')))} files)")
-    print(f"  • Dashboard: evaluation/dashboard/ (4 summary plots)")
+    print(f"\nOUTPUT FILES:")
+    print(f"  - Metrics: evaluation/{satellite_type}_metrics.csv")
+    print(f"  - Shapiro: evaluation/{satellite_type}_shapiro.csv")
+    print(f"  - Plots: evaluation/plots/ ({len(list(PLOTS_DIR.glob(f'*{satellite_type.lower()}*')))} files)")
+    print(f"  - Dashboard: evaluation/dashboard/ (4 summary plots)")
     
     print(f"\n{'='*70}\n")
 
@@ -609,7 +616,7 @@ def evaluate_for_satellite(satellite_type):
         matched_df = match_predictions_with_ground_truth(predictions_df, ground_truth_df)
         
         if len(matched_df) == 0:
-            print(f"\n✗ No matched data found for {satellite_type}")
+            print(f"\n[FAIL] No matched data found for {satellite_type}")
             return
         
         # 3. Compute metrics
@@ -631,11 +638,11 @@ def evaluate_for_satellite(satellite_type):
         print_evaluation_summary(metrics_df, shapiro_df, satellite_type)
         
         print(f"{'='*70}")
-        print(f"✓ {satellite_type} EVALUATION COMPLETED SUCCESSFULLY")
+        print(f"[OK] {satellite_type} EVALUATION COMPLETED SUCCESSFULLY")
         print(f"{'='*70}\n")
         
     except Exception as e:
-        print(f"\n✗ ERROR during {satellite_type} evaluation: {e}")
+        print(f"\n[ERROR] during {satellite_type} evaluation: {e}")
         import traceback
         traceback.print_exc()
         raise
@@ -647,18 +654,18 @@ def print_final_summary():
     print("EVALUATION SUMMARY")
     print(f"{'='*70}")
     
-    print(f"\n📊 EVALUATION COMPLETED FOR:")
+    print(f"\nEVALUATION COMPLETED FOR:")
     for sat_type in ['MEO', 'GEO']:
         metrics_file = EVALUATION_DIR / f"{sat_type}_metrics.csv"
         if metrics_file.exists():
-            print(f"  • {sat_type}: ✓")
+            print(f"  - {sat_type}: [OK]")
         else:
-            print(f"  • {sat_type}: ✗")
+            print(f"  - {sat_type}: [FAIL]")
     
-    print(f"\n📁 OUTPUT LOCATIONS:")
-    print(f"  • Metrics tables: {EVALUATION_DIR}")
-    print(f"  • QQ plots & histograms: {PLOTS_DIR}")
-    print(f"  • Dashboard plots: {DASHBOARD_DIR}")
+    print(f"\nOUTPUT LOCATIONS:")
+    print(f"  - Metrics tables: {EVALUATION_DIR}")
+    print(f"  - QQ plots & histograms: {PLOTS_DIR}")
+    print(f"  - Dashboard plots: {DASHBOARD_DIR}")
     
     # Count files
     metrics_count = len(list(EVALUATION_DIR.glob("*_metrics.csv")))
@@ -666,14 +673,14 @@ def print_final_summary():
     plot_count = len(list(PLOTS_DIR.glob("*.png")))
     dashboard_count = len(list(DASHBOARD_DIR.glob("*.png")))
     
-    print(f"\n📈 FILES GENERATED:")
-    print(f"  • Metrics tables: {metrics_count}")
-    print(f"  • Shapiro tables: {shapiro_count}")
-    print(f"  • QQ plots & histograms: {plot_count}")
-    print(f"  • Dashboard plots: {dashboard_count}")
+    print(f"\nFILES GENERATED:")
+    print(f"  - Metrics tables: {metrics_count}")
+    print(f"  - Shapiro tables: {shapiro_count}")
+    print(f"  - QQ plots & histograms: {plot_count}")
+    print(f"  - Dashboard plots: {dashboard_count}")
     
     print(f"\n{'='*70}")
-    print("✓ ALL EVALUATIONS COMPLETED SUCCESSFULLY")
+    print("[OK] ALL EVALUATIONS COMPLETED SUCCESSFULLY")
     print(f"{'='*70}\n")
 
 
@@ -702,7 +709,7 @@ def main():
         print_final_summary()
         
     except Exception as e:
-        print(f"\n✗ FATAL ERROR: {e}")
+        print(f"\n[FATAL ERROR]: {e}")
         import traceback
         traceback.print_exc()
         raise

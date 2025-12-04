@@ -6,14 +6,12 @@ and clock error data, preparing it for multi-horizon time-series forecasting
 with 15-minute intervals.
 
 Input: Raw CSV files with columns: utc_time, x_error, y_error, z_error, satclockerror
-Output: Cleaned, resampled, and scaled datasets ready for modeling
+Output: Cleaned, resampled datasets ready for modeling (no scaling)
 """
 
 import os
 import pandas as pd
 import numpy as np
-from sklearn.preprocessing import StandardScaler
-import joblib
 from pathlib import Path
 
 
@@ -284,39 +282,6 @@ def smooth_noise(df, window=3):
     return df_smooth
 
 
-def scale_data(df, scaler_name):
-    """
-    Apply StandardScaler to the dataset and save the fitted scaler.
-    
-    Args:
-        df: pandas DataFrame
-        scaler_name: Name to save the scaler file
-        
-    Returns:
-        Scaled DataFrame, fitted scaler object
-    """
-    print(f"\n→ Scaling data with StandardScaler...")
-    
-    # Initialize scaler
-    scaler = StandardScaler()
-    
-    # Fit and transform
-    scaled_values = scaler.fit_transform(df[ERROR_COLUMNS])
-    
-    # Create new dataframe with scaled values
-    df_scaled = df.copy()
-    df_scaled[ERROR_COLUMNS] = scaled_values
-    
-    # Save scaler
-    scaler_path = SCALERS_DIR / f"{scaler_name}_scaler.pkl"
-    joblib.dump(scaler, scaler_path)
-    
-    print(f"  ✓ Data scaled")
-    print(f"  ✓ Scaler saved to: {scaler_path}")
-    
-    return df_scaled, scaler
-
-
 # ============================================================================
 # MAIN PIPELINE
 # ============================================================================
@@ -329,7 +294,6 @@ def clean_pipeline(df, dataset_name):
     1. Resample to 15-minute intervals
     2. Remove outliers using Z-score
     3. Smooth noise with rolling median
-    4. Scale data with StandardScaler
     
     Args:
         df: pandas DataFrame
@@ -360,11 +324,8 @@ def clean_pipeline(df, dataset_name):
     # Step 3: Smooth noise
     df = smooth_noise(df, window=SMOOTHING_WINDOW)
     
-    # Step 4: Scale data
-    df, scaler = scale_data(df, dataset_name)
-    
     # Print final info
-    print_dataset_info(df, dataset_name, "CLEANED")
+    print_dataset_info(df, dataset_name, "CLEANED (UNSCALED)")
     stats['final_shape'] = df.shape
     stats['final_time_range'] = (df.index.min(), df.index.max())
     

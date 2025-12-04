@@ -24,15 +24,56 @@ export default function ModelLightGBMPage() {
     async function loadMetrics() {
       try {
         setLoading(true);
+        setError(null);
+        
+        // Explicit file paths - must load from these exact JSONs, no fallbacks
+        const meoPath = '/data/models/metrics/lightgbm_meo_metrics.json';
+        const geoPath = '/data/models/metrics/lightgbm_geo_metrics.json';
+        
+        console.log('[ModelLightGBM] Loading metrics from:', {
+          meoPath,
+          geoPath,
+          timestamp: new Date().toISOString(),
+        });
+        
+        // Load both metrics using loadModelMetrics (JSON only, no CSV fallback)
         const [meo, geo] = await Promise.all([
-          dataLoader.loadModelMetrics('/data/models/metrics/lightgbm_meo_metrics.json'),
-          dataLoader.loadModelMetrics('/data/models/metrics/lightgbm_geo_metrics.json'),
+          dataLoader.loadModelMetrics(meoPath),
+          dataLoader.loadModelMetrics(geoPath),
         ]);
+        
+        // Verify data structure and log sample values
+        console.log('[ModelLightGBM] MEO metrics loaded:', {
+          variables: Object.keys(meo),
+          sampleHorizon_x_error_15min: meo['x_error (m)']?.['15min'],
+          fullMeoData: meo,
+        });
+        
+        console.log('[ModelLightGBM] GEO metrics loaded:', {
+          variables: Object.keys(geo),
+          sampleHorizon_x_error_15min: geo['x_error (m)']?.['15min'],
+        });
+        
+        // Strict validation - must have expected structure
+        if (!meo || !meo['x_error (m)'] || !meo['x_error (m)']['15min']) {
+          throw new Error('MEO metrics JSON has invalid structure or is missing required fields');
+        }
+        
+        if (!geo || !geo['x_error (m)'] || !geo['x_error (m)']['15min']) {
+          throw new Error('GEO metrics JSON has invalid structure or is missing required fields');
+        }
+        
         setMeoMetrics(meo);
         setGeoMetrics(geo);
+        
+        console.log('[ModelLightGBM] Metrics successfully loaded and validated');
       } catch (err) {
-        setError('Failed to load model metrics');
-        console.error(err);
+        const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+        setError(`Failed to load LightGBM metrics JSON: ${errorMsg}`);
+        console.error('[ModelLightGBM] Load error:', err);
+        // Set null to ensure chart breaks if JSON is missing
+        setMeoMetrics(null);
+        setGeoMetrics(null);
       } finally {
         setLoading(false);
       }
@@ -48,10 +89,21 @@ export default function ModelLightGBMPage() {
     const result: Record<string, string | number> = { horizon };
     variables.forEach((variable) => {
       const varMetrics = metrics?.[variable]?.[horizon];
-      result[variable.split(' ')[0]] = varMetrics?.val_rmse ?? 0;
+      const valRmse = varMetrics?.val_rmse ?? 0;
+      result[variable.split(' ')[0]] = valRmse;
+      
+      // Log chart values for debugging
+      if (horizon === '15min' || horizon === '24h') {
+        console.log(`[ModelLightGBM Chart] ${satellite} ${horizon} ${variable}: val_rmse=${valRmse}`);
+      }
     });
     return result;
   });
+  
+  // Log full chart data for first render
+  if (chartData.length > 0 && chartData[0].horizon === '15min') {
+    console.log('[ModelLightGBM Chart] Full chart data:', chartData);
+  }
 
   return (
     <PageLayout

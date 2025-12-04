@@ -63,6 +63,24 @@ export interface BoxPlotData {
   outliers: number[];
 }
 
+export interface ShapiroResult {
+  horizon_label: string;
+  horizon_minutes: number;
+  n_samples: number;
+  W_x_error: number;
+  p_x_error: number;
+  normal_x_error: string;
+  W_y_error: number;
+  p_y_error: number;
+  normal_y_error: string;
+  W_z_error: number;
+  p_z_error: number;
+  normal_z_error: string;
+  W_satclockerror: number;
+  p_satclockerror: number;
+  normal_satclockerror: string;
+}
+
 class DataLoaderService {
   private baseUrl: string;
 
@@ -134,6 +152,10 @@ class DataLoaderService {
 
   async loadEvaluationMetrics(path: string): Promise<EvaluationMetrics[]> {
     return this.loadCSV<EvaluationMetrics>(path);
+  }
+
+  async loadShapiroResults(path: string): Promise<ShapiroResult[]> {
+    return this.loadCSV<ShapiroResult>(path);
   }
 
   async loadFeatureData(path: string): Promise<Record<string, unknown>[]> {
